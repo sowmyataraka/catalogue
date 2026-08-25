@@ -94,10 +94,10 @@ stage('Check Dependabot Alerts') {
 
                         REPO="sowmyataraka/catalogue"
 
-                        curl -s -L \
+                        curl -fsSL \
                         -H "Accept: application/vnd.github+json" \
                         -H "Authorization: Bearer ${GH_TOKEN}" \
-                        -H "X-GitHub-Api-Version: 2026-03-10" \
+                        -H "X-GitHub-Api-Version: 2022-11-28" \
                         "https://api.github.com/repos/${REPO}/dependabot/alerts?state=open" \
                         -o alerts.json
 
