@@ -14,21 +14,21 @@ pipeline {
         disableConcurrentBuilds()
         timeout(time: 15, unit: 'MINUTES')
     }
-    /*parameters {
+    /* parameters {
         string(name: 'PERSON', defaultValue: 'Mr Jenkins', description: 'Who should I say hello to?')
         text(name: 'BIOGRAPHY', defaultValue: '', description: 'Enter some information about the person')
         booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Toggle this value')
         choice(name: 'CHOICE', choices: ['One', 'Two', 'Three'], description: 'Pick something')
         password(name: 'PASSWORD', defaultValue: 'SECRET', description: 'Enter a password')
-    }*/
+    } */
     // Build
     stages {
-        stage ('Read version'){
+        stage('Read version'){
             steps{
                 script {
                     def packageJson = readJSON file: 'package.json'
                     // Extract the version property
-                    appVersion = packageJson.version 
+                    appVersion = packageJson.version
                     echo "The application version is: ${appVersion}"
                 }
             }
@@ -42,16 +42,7 @@ pipeline {
                 } 
             }
         }
-        stage('Build') {
-            steps {
-                script {
-                    sh """
-                        echo "Version: ${appVersion}"
-                    """
-                } 
-            }
-        }
-        //this command gives us coverage report and test cases report, sonarqube access this to check quality gate
+        // this command gives us coverage report and test cases report, sonarqube access this to check quality gate
         stage('Unit tests') {
             steps {
                 script {
@@ -60,33 +51,28 @@ pipeline {
                     """
                 } 
             }
-        }   
-       /* stage('SonarQube Analysis') {
+        }
+        /* stage('SonarQube Analysis') {
             steps {
-                script {
-                    //'My SonarQube Server' must match the name configured in Jenkins System Settings
-                    withSonarQubeEnv('sonar-server') {
-                            sh "${tool 'Sonar-8'}/bin/sonar-scanner"
-                    }
-                }
-            }
-        }*/
-        /*stage('SonarQube Quality Gate') {
-    steps {
-        timeout(time: 10, unit: 'MINUTES') {
-            script {
-                def qg = waitForQualityGate()
-
-                echo "SonarQube Quality Gate Status: ${qg.status}"
-
-                if (qg.status != 'OK') {
-                    echo "WARNING: SonarQube Quality Gate failed: ${qg.status}"
+                // 'My SonarQube Server' must match the name configured in Jenkins System Settings
+                withSonarQubeEnv('sonar-server') {
+                    sh "${tool 'sonar-8'}/bin/sonar-scanner"
                 }
             }
         }
-    }
-}*/
-stage('Check Dependabot Alerts') {
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate() // Pauses pipeline
+                        if (qg.status != 'OK') {
+                            error "Pipeline aborted: ${qg.status}"
+                        }
+                    }
+                }
+            }
+        } */
+        stage('Check Dependabot Alerts') {
             steps {
                 withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
                     sh '''
@@ -94,13 +80,12 @@ stage('Check Dependabot Alerts') {
 
                         REPO="sowmyataraka/catalogue"
 
-                        curl -fsSL \
+                        curl -s -L \
                         -H "Accept: application/vnd.github+json" \
                         -H "Authorization: Bearer ${GH_TOKEN}" \
-                        -H "X-GitHub-Api-Version: 2022-11-28" \
+                        -H "X-GitHub-Api-Version: 2026-03-10" \
                         "https://api.github.com/repos/${REPO}/dependabot/alerts?state=open" \
                         -o alerts.json
-
 
                         echo "---- Open Dependabot Alerts ----"
                         jq -r '.[] | "\\(.number)\\t\\(.security_vulnerability.severity)\\t\\(.dependency.package.name)\\t\\(.security_advisory.ghsa_id)"' alerts.json
@@ -116,6 +101,19 @@ stage('Check Dependabot Alerts') {
                             echo "✅ No High/Critical dependency alerts found."
                         fi
                     '''
+                }
+            }
+        }
+        stage('Docker Build') {
+            steps {
+                script {
+                    // in this block we get aws authentication
+                    withAWS(credentials: 'aws-creds', region: 'us-east-1') {
+                        sh """
+                            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
+                            docker build -t ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} .
+                        """
+                    }
                 }
             }
         }
@@ -142,34 +140,32 @@ stage('Check Dependabot Alerts') {
                 }
             }
         }
-        stage('Docker Build') {
+        stage('ECR Image push') {
             steps {
                 script {
-                    // in this build we get aws authentication
+                    // in this block we get aws authentication
                     withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-                    sh """
-                    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
-                    docker build -t ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} .
-                    docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
-                """
-                  }
-               }
-            } 
+                        sh """
+                            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
+                            docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
+                        """
+                    }
+                }
+            }
         }
-    
         stage('Deploy') {
             when {
                 // Evaluates the boolean parameter directly
                 expression { "${params.DEPLOY}" == "true" }
             }
-             input {
+            /* input {
                 message "Should we continue?"
                 ok "Yes, we should."
                 submitter "alice,bob"
                 parameters {
                     string(name: 'PERSON', defaultValue: 'Mr Jenkins', description: 'Who should I say hello to?')
                 }
-            } 
+            } */
             steps {
                 script {
                     sh """
