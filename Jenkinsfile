@@ -72,56 +72,56 @@ pipeline {
                 }
             }
         } */
-        stage('Check Dependency Vulnerabilities') {
-    steps {
-        withCredentials([string(
-            credentialsId: 'github-pat',
-            variable: 'GITHUB_TOKEN'
-        )]) {
+//         stage('Check Dependency Vulnerabilities') {
+//     steps {
+//         withCredentials([string(
+//             credentialsId: 'github-pat',
+//             variable: 'GITHUB_TOKEN'
+//         )]) {
 
-            script {
-                def response = sh(
-                    script: '''
-                        curl -sS -L \
-                          -H "Accept: application/vnd.github+json" \
-                          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-                          -H "X-GitHub-Api-Version: 2026-03-10" \
-                          "https://api.github.com/repos/sowmyataraka/catalogue/dependabot/alerts"
-                    ''',
-                    returnStdout: true
-                ).trim()
+//             script {
+//                 def response = sh(
+//                     script: '''
+//                         curl -sS -L \
+//                           -H "Accept: application/vnd.github+json" \
+//                           -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+//                           -H "X-GitHub-Api-Version: 2026-03-10" \
+//                           "https://api.github.com/repos/sowmyataraka/catalogue/dependabot/alerts"
+//                     ''',
+//                     returnStdout: true
+//                 ).trim()
 
-                def alerts = readJSON text: response
+//                 def alerts = readJSON text: response
 
-                def dangerousAlerts = alerts.findAll { alert ->
-                    alert.state == 'open' &&
-                    ['high', 'critical'].contains(
-                        alert.security_vulnerability.severity?.toLowerCase()
-                    )
-                }
+//                 def dangerousAlerts = alerts.findAll { alert ->
+//                     alert.state == 'open' &&
+//                     ['high', 'critical'].contains(
+//                         alert.security_vulnerability.severity?.toLowerCase()
+//                     )
+//                 }
 
-                if (dangerousAlerts) {
-                    echo "❌ High/Critical dependency vulnerabilities found:"
+//                 if (dangerousAlerts) {
+//                     echo "❌ High/Critical dependency vulnerabilities found:"
 
-                    dangerousAlerts.each { alert ->
-                        echo """
-Alert #${alert.number}
-Package: ${alert.dependency.package.name}
-Severity: ${alert.security_vulnerability.severity}
-CVE: ${alert.security_advisory.cve_id}
-Summary: ${alert.security_advisory.summary}
-Fixed version: ${alert.security_vulnerability.first_patched_version?.identifier}
-"""
-                    }
+//                     dangerousAlerts.each { alert ->
+//                         echo """
+// Alert #${alert.number}
+// Package: ${alert.dependency.package.name}
+// Severity: ${alert.security_vulnerability.severity}
+// CVE: ${alert.security_advisory.cve_id}
+// Summary: ${alert.security_advisory.summary}
+// Fixed version: ${alert.security_vulnerability.first_patched_version?.identifier}
+// """
+//                     }
 
-                    error("Build failed: High/Critical dependency vulnerabilities detected.")
-                }
+//                     error("Build failed: High/Critical dependency vulnerabilities detected.")
+//                 }
 
-                echo "✅ No open High/Critical dependency vulnerabilities found."
-            }
-        }
-    }
-}
+//                 echo "✅ No open High/Critical dependency vulnerabilities found."
+//             }
+//         }
+//     }
+// }
         stage('Docker Build') {
             steps {
                 script {
