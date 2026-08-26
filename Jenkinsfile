@@ -72,115 +72,69 @@ pipeline {
                 }
             }
         } */
-        stage('Check Dependabot Alerts') {
-            pipeline {
-    agent any
+        stage('Check Dependency Vulnerabilities') {
+    steps {
+        withCredentials([string(
+            credentialsId: 'github-pat',
+            variable: 'GITHUB_TOKEN'
+        )]) {
 
-    pipeline {
-    agent any
-
-    stages {
-
-        stage('Check Dependency Alerts') {
-            steps {
-                withCredentials([
-                    string(
-                        credentialsId: 'github-token',
-                        variable: 'GITHUB_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        set -e
-
-                        echo "=========================================="
-                        echo "Checking GitHub Dependabot Alerts"
-                        echo "=========================================="
-
-                        curl -sS -f -L \
+            script {
+                def response = sh(
+                    script: '''
+                        curl -sS -L \
                           -H "Accept: application/vnd.github+json" \
                           -H "Authorization: Bearer ${GITHUB_TOKEN}" \
                           -H "X-GitHub-Api-Version: 2026-03-10" \
-                          "https://api.github.com/repos/sowmyataraka/catalogue/dependabot/alerts?state=open" \
-                          -o dependabot-alerts.json
+                          "https://api.github.com/repos/sowmyataraka/catalogue/dependabot/alerts"
+                    ''',
+                    returnStdout: true
+                ).trim()
 
-                        echo ""
-                        echo "Open dependency alerts:"
-                        echo "------------------------------------------"
+                def alerts = readJSON text: response
 
-                        jq -r '
-                            .[] |
-                            "Alert #\\(.number) | Package: \\(.dependency.package.name) | Severity: \\(.security_vulnerability.severity) | CVE: \\(.security_advisory.cve_id // "N/A")"
-                        ' dependabot-alerts.json
-
-                        HIGH_CRITICAL=$(jq '
-                            [
-                                .[] |
-                                select(
-                                    .state == "open" and
-                                    (
-                                        .security_vulnerability.severity == "high" or
-                                        .security_vulnerability.severity == "critical"
-                                    )
-                                )
-                            ] | length
-                        ' dependabot-alerts.json)
-
-                        echo ""
-                        echo "High/Critical vulnerabilities: ${HIGH_CRITICAL}"
-                        echo "------------------------------------------"
-
-                        if [ "${HIGH_CRITICAL}" -gt 0 ]; then
-
-                            echo ""
-                            echo "DEPENDENCY SECURITY CHECK FAILED"
-                            echo ""
-
-                            jq -r '
-                                .[] |
-                                select(
-                                    .state == "open" and
-                                    (
-                                        .security_vulnerability.severity == "high" or
-                                        .security_vulnerability.severity == "critical"
-                                    )
-                                ) |
-                                "Alert #\\(.number) | Package: \\(.dependency.package.name) | Severity: \\(.security_vulnerability.severity) | CVE: \\(.security_advisory.cve_id // "N/A") | Fixed in: \\(.security_vulnerability.first_patched_version.identifier // "N/A")"
-                            ' dependabot-alerts.json
-
-                            echo ""
-                            echo "Please fix the High/Critical dependency vulnerabilities."
-                            exit 1
-                        fi
-
-                        echo "DEPENDENCY SECURITY CHECK PASSED"
-                        echo "No High or Critical vulnerabilities found."
-                    '''
+                def dangerousAlerts = alerts.findAll { alert ->
+                    alert.state == 'open' &&
+                    ['high', 'critical'].contains(
+                        alert.security_vulnerability.severity?.toLowerCase()
+                    )
                 }
-            }
-        }
 
-        stage('Build') {
-            steps {
-                echo 'Build stage'
-                sh 'npm ci'
+                if (dangerousAlerts) {
+                    echo "❌ High/Critical dependency vulnerabilities found:"
+
+                    dangerousAlerts.each { alert ->
+                        echo """
+Alert #${alert.number}
+Package: ${alert.dependency.package.name}
+Severity: ${alert.security_vulnerability.severity}
+CVE: ${alert.security_advisory.cve_id}
+Summary: ${alert.security_advisory.summary}
+Fixed version: ${alert.security_vulnerability.first_patched_version?.identifier}
+"""
+                    }
+
+                    error("Build failed: High/Critical dependency vulnerabilities detected.")
+                }
+
+                echo "✅ No open High/Critical dependency vulnerabilities found."
             }
         }
     }
 }
-}
-        // stage('Docker Build') {
-        //     steps {
-        //         script {
-        //             // in this block we get aws authentication
-        //             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-        //                 sh """
-        //                     aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
-        //                     docker build -t ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} .
-        //                 """
-        //             }
-        //         }
-        //     }
-        // }
+        stage('Docker Build') {
+            steps {
+                script {
+                    // in this block we get aws authentication
+                    withAWS(credentials: 'aws-creds', region: 'us-east-1') {
+                        sh """
+                            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
+                            docker build -t ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion} .
+                        """
+                    }
+                }
+            }
+        }
         stage('Trivy Scan') {
             steps {
                 script {
