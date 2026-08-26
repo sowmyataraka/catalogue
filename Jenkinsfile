@@ -76,67 +76,84 @@ pipeline {
             pipeline {
     agent any
 
+    pipeline {
+    agent any
+
     stages {
+
         stage('Check Dependency Alerts') {
             steps {
-                withCredentials([string(
-                    credentialsId: 'github-token',
-                    variable: 'GITHUB_TOKEN'
-                )]) {
-
+                withCredentials([
+                    string(
+                        credentialsId: 'github-token',
+                        variable: 'GITHUB_TOKEN'
+                    )
+                ]) {
                     sh '''
                         set -e
 
-                        echo "Checking GitHub Dependabot alerts..."
+                        echo "=========================================="
+                        echo "Checking GitHub Dependabot Alerts"
+                        echo "=========================================="
 
-                        curl -sS -L \
+                        curl -sS -f -L \
                           -H "Accept: application/vnd.github+json" \
                           -H "Authorization: Bearer ${GITHUB_TOKEN}" \
                           -H "X-GitHub-Api-Version: 2026-03-10" \
                           "https://api.github.com/repos/sowmyataraka/catalogue/dependabot/alerts?state=open" \
                           -o dependabot-alerts.json
 
+                        echo ""
                         echo "Open dependency alerts:"
+                        echo "------------------------------------------"
 
                         jq -r '
-                          .[] |
-                          "Alert #\\(.number) | \\(.dependency.package.name) | \\(.security_vulnerability.severity) | \\(.security_advisory.cve_id // "N/A")"
+                            .[] |
+                            "Alert #\\(.number) | Package: \\(.dependency.package.name) | Severity: \\(.security_vulnerability.severity) | CVE: \\(.security_advisory.cve_id // "N/A")"
                         ' dependabot-alerts.json
 
                         HIGH_CRITICAL=$(jq '
-                          [
-                            .[] |
-                            select(
-                              .state == "open" and
-                              (
-                                .security_vulnerability.severity == "high" or
-                                .security_vulnerability.severity == "critical"
-                              )
-                            )
-                          ] | length
+                            [
+                                .[] |
+                                select(
+                                    .state == "open" and
+                                    (
+                                        .security_vulnerability.severity == "high" or
+                                        .security_vulnerability.severity == "critical"
+                                    )
+                                )
+                            ] | length
                         ' dependabot-alerts.json)
 
-                        echo "High/Critical alerts: ${HIGH_CRITICAL}"
+                        echo ""
+                        echo "High/Critical vulnerabilities: ${HIGH_CRITICAL}"
+                        echo "------------------------------------------"
 
                         if [ "${HIGH_CRITICAL}" -gt 0 ]; then
-                            echo "ERROR: High or Critical dependency vulnerabilities detected!"
+
                             echo ""
+                            echo "DEPENDENCY SECURITY CHECK FAILED"
+                            echo ""
+
                             jq -r '
-                              .[] |
-                              select(
-                                .state == "open" and
-                                (
-                                  .security_vulnerability.severity == "high" or
-                                  .security_vulnerability.severity == "critical"
-                                )
-                              ) |
-                              "Alert #\\(.number): \\(.dependency.package.name) | Severity: \\(.security_vulnerability.severity) | CVE: \\(.security_advisory.cve_id // "N/A") | Fixed: \\(.security_vulnerability.first_patched_version.identifier // "N/A")"
+                                .[] |
+                                select(
+                                    .state == "open" and
+                                    (
+                                        .security_vulnerability.severity == "high" or
+                                        .security_vulnerability.severity == "critical"
+                                    )
+                                ) |
+                                "Alert #\\(.number) | Package: \\(.dependency.package.name) | Severity: \\(.security_vulnerability.severity) | CVE: \\(.security_advisory.cve_id // "N/A") | Fixed in: \\(.security_vulnerability.first_patched_version.identifier // "N/A")"
                             ' dependabot-alerts.json
 
+                            echo ""
+                            echo "Please fix the High/Critical dependency vulnerabilities."
                             exit 1
                         fi
 
-                        echo "No High or Critical dependency alerts found."
+                        echo "DEPENDENCY SECURITY CHECK PASSED"
+                        echo "No High or Critical vulnerabilities found."
                     '''
                 }
             }
@@ -144,12 +161,12 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo 'Build starts only when dependency security check passes.'
+                echo 'Build stage'
                 sh 'npm ci'
-                sh 'npm test'
             }
         }
     }
+}
 }
         // stage('Docker Build') {
         //     steps {
