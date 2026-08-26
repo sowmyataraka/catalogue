@@ -117,42 +117,42 @@ pipeline {
         //         }
         //     }
         // }
-        // stage('Trivy Scan') {
-        //     steps {
-        //         script {
-        //             def dockerfileScan = sh(
-        //                 script: """
-        //                     trivy config --exit-code 1 --severity HIGH,CRITICAL --format table ./Dockerfile
-        //                 """,
-        //                 returnStatus: true
-        //             )
+        stage('Trivy Scan') {
+            steps {
+                script {
+                    def dockerfileScan = sh(
+                        script: """
+                            trivy config --exit-code 1 --severity HIGH,CRITICAL --format table ./Dockerfile
+                        """,
+                        returnStatus: true
+                    )
 
-        //             def imageScan = sh(
-        //                 script: """
-        //                     trivy image --scanners vuln --pkg-types os --exit-code 1 --severity HIGH,CRITICAL --format table ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
-        //                 """,
-        //                 returnStatus: true
-        //             )
+                    def imageScan = sh(
+                        script: """
+                            trivy image --scanners vuln --pkg-types os --exit-code 1 --severity HIGH,CRITICAL --format table ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
+                        """,
+                        returnStatus: true
+                    )
 
-        //             if (dockerfileScan != 0 || imageScan != 0) {
-        //                 error "Trivy found HIGH/CRITICAL issues in Dockerfile and/or OS packages. Failing pipeline."
-        //             }
-        //         }
-        //     }
-        // }
-        // stage('ECR Image push') {
-        //     steps {
-        //         script {
-        //             // in this block we get aws authentication
-        //             withAWS(credentials: 'aws-creds', region: 'us-east-1') {
-        //                 sh """
-        //                     aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
-        //                     docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
-        //                 """
-        //             }
-        //         }
-        //     }
-        // }
+                    if (dockerfileScan != 0 || imageScan != 0) {
+                        error "Trivy found HIGH/CRITICAL issues in Dockerfile and/or OS packages. Failing pipeline."
+                    }
+                }
+            }
+        }
+        stage('ECR Image push') {
+            steps {
+                script {
+                    // in this block we get aws authentication
+                    withAWS(credentials: 'aws-creds', region: 'us-east-1') {
+                        sh """
+                            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${acc_id}.dkr.ecr.us-east-1.amazonaws.com
+                            docker push ${acc_id}.dkr.ecr.us-east-1.amazonaws.com/${project}/${component}:${appVersion}
+                        """
+                    }
+                }
+            }
+        }
         stage('Deploy') {
             when {
                 // Evaluates the boolean parameter directly
