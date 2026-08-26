@@ -1,3 +1,16 @@
+// @Library('jenkins-shared-library') _
+
+// def configMap = [
+//     project: "roboshop",
+//     component: "catalogue"
+// ]
+// if (env.BRANCH_NAME.equalsIgnoreCase ('main')){
+//     nodejsEKSMain(configMap)
+// }
+// else {
+//     nodejsEKSPipeline(configMap)
+// }
+
 @Library('jenkins-shared-library') _
 
 def configMap = [
@@ -5,7 +18,7 @@ def configMap = [
     component: "catalogue"
 ]
 if (env.BRANCH_NAME.equalsIgnoreCase('main')){
-    nodejsEKSMain(configMap)
+echo "We will deal later"
 }
 else {
     nodejsEKSPipeline(configMap)
