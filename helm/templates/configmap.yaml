@@ -7,3 +7,4 @@ data:
   MONGO: "true"
   MONGO_URL: {{ .Values.configmap.mongodbUrl }}
 
+

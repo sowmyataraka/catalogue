@@ -171,6 +171,5 @@ describe('DB error handling', () => {
         mockFindResult.toArray.mockRejectedValueOnce(new Error('db error'));
         const res = await request(app).get('/search/robot');
         expect(res.status).toBe(500);
-   
     });
 });
